@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f4f6;
+  --background-elevated: #ffffff;
+  --foreground: #111827;
+  --muted: #6b7280;
+  --line: #d7dce2;
+  --brand: #0f5b78;
+  --brand-soft: #e7f2f7;
+  --success: #0f766e;
+  --danger: #be123c;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --shadow-soft: 0 14px 40px -26px rgba(17, 24, 39, 0.38);
+  --font-geist-sans: Inter, "Segoe UI", Arial, sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, monospace;
+  --font-bebas-neue: "Trebuchet MS", "Arial Black", Arial, sans-serif;
+  --font-display: var(--font-bebas-neue);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+a {
+  transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}

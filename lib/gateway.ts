@@ -1,0 +1,109 @@
+import "server-only";
+import { buildCheckoutPayload } from "./payload";
+import { NicepayRegistrationResponse, NicepayCheckoutResult, NicepayTransactionStatusPayload, NicepayTransactionStatusResponse } from "./types";
+import { getCartLines } from "./cart";
+
+const registrationUrl = `${process.env.NICEPAY_BASE_URL}/redirect/v2/registration`;
+const getStatusUrl = `${process.env.NICEPAY_BASE_URL}/direct/v2/inquiry`;
+
+function normalizeRedirectUrl(response: NicepayRegistrationResponse) {
+  const paymentUrl = response.paymentURL;
+  const tXid = response.tXid;
+
+  if (paymentUrl && tXid) {
+    return `${paymentUrl}?tXid=${encodeURIComponent(tXid)}`;
+  }
+
+  return response.redirectUrl ?? response.url ?? null;
+}
+
+function parseRegistrationResponse(responseText: string) {
+  try {
+    return responseText ? (JSON.parse(responseText) as NicepayRegistrationResponse) : {};
+  } catch {
+    return { raw: responseText };
+  }
+}
+
+export async function registerNicepayTransaction(lines: ReturnType<typeof getCartLines>): Promise<NicepayCheckoutResult> {
+  const registrationPayload = buildCheckoutPayload(lines);
+
+  const response = await fetch(registrationUrl, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(registrationPayload),
+  });
+
+  const responseText = await response.text();
+  const registrationResponse = parseRegistrationResponse(responseText);
+
+  if (!response.ok) {
+    throw new Error(
+      typeof registrationResponse === "object" && registrationResponse && "resultMsg" in registrationResponse
+        ? String(registrationResponse.resultMsg ?? "NICEPAY registration failed")
+        : "NICEPAY registration failed",
+    );
+  }
+
+  if ("raw" in registrationResponse) {
+    throw new Error("Invalid JSON response from NICEPAY");
+  }
+
+  if (registrationResponse.resultCd !== "0000") {
+    throw new Error(registrationResponse.resultMsg ?? "NICEPAY registration failed");
+  }
+
+  const redirectUrl = normalizeRedirectUrl(registrationResponse);
+  if (!redirectUrl) {
+    throw new Error("NICEPAY response missing payment URL");
+  }
+
+  return {
+    redirectUrl,
+    referenceNo: registrationPayload.referenceNo,
+    response: registrationResponse,
+  };
+}
+
+function parseStatusResponse(responseText: string) {
+  try {
+    return responseText ? (JSON.parse(responseText) as NicepayTransactionStatusResponse) : {};
+  } catch {
+    return { raw: responseText };
+  }
+}
+
+export async function getTransactionStatus(
+  payload: NicepayTransactionStatusPayload,
+): Promise<NicepayTransactionStatusResponse> {
+  const response = await fetch(getStatusUrl, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+  const statusResponse = parseStatusResponse(responseText) as NicepayTransactionStatusResponse;
+
+  if (!response.ok) {
+    throw new Error(
+      typeof statusResponse === "object" && statusResponse && "resultCd" in statusResponse && "resultMsg" in statusResponse
+        ? String(statusResponse.resultMsg ?? "NICEPAY inquiry failed")
+        : "NICEPAY inquiry failed",
+    );
+  }
+
+  if ("raw" in statusResponse) {
+    throw new Error("Invalid JSON response from NICEPAY");
+  }
+
+  return statusResponse;
+}
